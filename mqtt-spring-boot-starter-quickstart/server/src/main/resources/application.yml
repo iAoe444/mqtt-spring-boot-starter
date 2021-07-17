@@ -1,0 +1,14 @@
+mqtt:
+  host: yun.iaoe.xyz          # mqtt代理服务器地址
+  port: 1883                # mqtt端口
+  clientId: mqtt.spring.boot.starter    # mqtt客户端ID
+  userName: stub            # mqtt用户名
+  password: stub            # mqtt密码
+  cleanSession: true        # 是否清理session
+  subTopics: # 初始化订阅主题
+    - topic: /user/12
+      qos: 1
+  willTopic: # 遗愿消息
+    topic: test                # 遗愿消息主题
+    qos: 2                    # 遗愿消息消息的qos
+    willMsg: test            # 遗愿消息消息体

@@ -9,11 +9,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import xyz.iaoe.spring.starter.mqtt.annotation.MqttController;
-import xyz.iaoe.spring.starter.mqtt.annotation.Subscribe;
+import xyz.iaoe.spring.starter.mqtt.annotation.Topic;
 import xyz.iaoe.spring.starter.mqtt.config.ConfigProperties;
-import xyz.iaoe.spring.starter.mqtt.utils.AsyncResult;
-import xyz.iaoe.spring.starter.mqtt.utils.Future;
-import xyz.iaoe.spring.starter.mqtt.utils.MqttRespMsg;
+import xyz.iaoe.spring.starter.mqtt.common.AsyncResult;
+import xyz.iaoe.spring.starter.mqtt.common.MqttReply;
+import xyz.iaoe.spring.starter.mqtt.common.MqttRespMsg;
 import xyz.iaoe.spring.starter.mqtt.utils.MqttXUtil;
 
 import javax.annotation.PostConstruct;
@@ -25,7 +25,7 @@ import javax.annotation.PostConstruct;
 @MqttController
 public class MqttRespService {
     private static final Logger logger = LoggerFactory.getLogger(MqttRespService.class);
-    private TimedCache<Long, Future<?>> msgFlight;
+    private TimedCache<Long, MqttReply<?>> msgFlight;
     @Autowired
     private ConfigProperties.MqttConfig mqttConfig;
     @Autowired
@@ -43,30 +43,30 @@ public class MqttRespService {
         }
     }
 
-    @Subscribe(topic = MqttXUtil.RESP_BUS_PATTERN)
+    @Topic(topicPattern = MqttXUtil.RESP_BUS_PATTERN)
     public void respBus(Long clientId, MqttMessage mqttMessage) {
         try {
             MqttRespMsg mqttRespMsg = new MqttRespMsg(mqttMessage.getPayload());
-            Future<?> future;
+            MqttReply<?> mqttReply;
             synchronized (this) {
-                future = msgFlight.get(mqttRespMsg.getSerialNum());
+                mqttReply = msgFlight.get(mqttRespMsg.getSerialNum());
                 msgFlight.remove(mqttRespMsg.getSerialNum());
             }
-            if (future == null) {
+            if (mqttReply == null) {
                 logger.error("Msg Duplicate");
             } else if (System.currentTimeMillis() - mqttRespMsg.getTimestamp() > mqttConfig.getRespTimeout()) {
-                future.tryFail("TIMEOUT");
+                mqttReply.tryFail("TIMEOUT");
             } else {
-                future.tryComplete(AsyncResult.decode(mqttRespMsg.getPayload()));
+                mqttReply.tryComplete(AsyncResult.decode(mqttRespMsg.getPayload()));
             }
         } catch (MqttRespMsg.CodecException e) {
             logger.error("mqtt respMsg decode error", e);
         }
     }
 
-    public void addWaitFuture(long serialNum, Future<?> future) {
+    public void addWaitReply(long serialNum, MqttReply<?> mqttReply) {
         if (mqttConfig.isResp()) {
-            msgFlight.put(serialNum, future);
+            msgFlight.put(serialNum, mqttReply);
         }
     }
 

@@ -1,20 +1,21 @@
 package xyz.iaoe.spring.starter.mqtt.config;
 
+import cn.hutool.core.util.StrUtil;
 import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.AutoConfigureAfter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.stereotype.Component;
 
+
 @Component
 @ComponentScan
 @ComponentScan(value = "xyz.iaoe.spring.starter.mqtt.service")
-@AutoConfigureAfter(value = {ConfigProperties.MqttConfig.class})
 public class MqttClientAutoConfig {
 
     private static final Logger logger = LoggerFactory.getLogger(MqttClientAutoConfig.class);
@@ -25,12 +26,17 @@ public class MqttClientAutoConfig {
     @Autowired
     private MqttConnectOptions options;
 
+    @Value("${mqtt.clientId}")
+    private String clientId;
+
     @Bean
     public MqttConnectOptions getOptions() {
         MqttConnectOptions options = new MqttConnectOptions();
         options.setCleanSession(mqttConfig.isCleanSession());
-        options.setUserName(mqttConfig.getUserName());
-        options.setPassword(mqttConfig.getPassword().toCharArray());
+        if (StrUtil.isNotBlank(mqttConfig.getUserName())) {
+            options.setUserName(mqttConfig.getUserName());
+            options.setPassword(mqttConfig.getPassword().toCharArray());
+        }
         options.setConnectionTimeout(mqttConfig.getConnectionTimeout());
         options.setKeepAliveInterval(mqttConfig.getKeepAliveInterval());
         options.setAutomaticReconnect(mqttConfig.isReconnect());

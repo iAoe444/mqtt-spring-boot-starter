@@ -7,10 +7,10 @@ import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import xyz.iaoe.spring.starter.mqtt.annotation.MqttProxyGen;
-import xyz.iaoe.spring.starter.mqtt.annotation.Subscribe;
+import xyz.iaoe.spring.starter.mqtt.annotation.Topic;
 import xyz.iaoe.spring.starter.mqtt.service.MqttRespService;
-import xyz.iaoe.spring.starter.mqtt.utils.Future;
-import xyz.iaoe.spring.starter.mqtt.utils.MqttRespMsg;
+import xyz.iaoe.spring.starter.mqtt.common.MqttReply;
+import xyz.iaoe.spring.starter.mqtt.common.MqttRespMsg;
 import xyz.iaoe.spring.starter.mqtt.utils.MqttXUtil;
 
 import javax.annotation.processing.*;
@@ -60,7 +60,7 @@ public class MqttServiceGenProcessor extends AbstractProcessor {
                     for (Element enclosed : element.getEnclosedElements()) {
                         if (enclosed.getKind() == ElementKind.METHOD) {
                             ExecutableElement methodElement = (ExecutableElement) enclosed;
-                            Subscribe annotation = methodElement.getAnnotation(Subscribe.class);
+                            Topic annotation = methodElement.getAnnotation(Topic.class);
                             if (annotation != null) {
                                 //获取前n-1个参数
                                 List<String> paramNames = methodElement.getParameters().subList(0, methodElement.getParameters().size() - 1)
@@ -70,7 +70,7 @@ public class MqttServiceGenProcessor extends AbstractProcessor {
                                 if (throwException) {
                                     error(methodElement, "method can not throw Exception");
                                 }
-                                boolean hasFuture = methodElement.getReturnType().toString().indexOf(Future.class.getCanonicalName()) == 0;
+                                boolean hasFuture = methodElement.getReturnType().toString().indexOf(MqttReply.class.getCanonicalName()) == 0;
 
                                 methodSpecList.add(MethodSpec.methodBuilder(methodElement.getSimpleName().toString())
                                         .addModifiers(Modifier.PUBLIC)
@@ -87,10 +87,10 @@ public class MqttServiceGenProcessor extends AbstractProcessor {
                                         )
                                         .addCode(
                                                 createMqttClientStatement(
-                                                        annotation.topic(),
+                                                        annotation.topicPattern(),
                                                         paramNames,
-                                                        annotation.qos(),
-                                                        annotation.retained(),
+                                                        annotation.sendQos(),
+                                                        annotation.sendRetained(),
                                                         //获取最后一个参数的类型
                                                         methodElement.getParameters()
                                                                 .get(methodElement.getParameters().size() - 1),
@@ -114,7 +114,7 @@ public class MqttServiceGenProcessor extends AbstractProcessor {
     }
 
     //创建Mqtt发消息语句
-    private CodeBlock createMqttClientStatement(String topicPattern, List<String> paramNames, int qos, boolean retained, VariableElement msgBody, boolean hasFuture) {
+    private CodeBlock createMqttClientStatement(String topicPattern, List<String> paramNames, int qos, boolean retained, VariableElement msgBody, boolean hasReply) {
         CodeBlock.Builder codeBlock = CodeBlock.builder();
         String bodyType = msgBody.asType().toString();
         codeBlock.beginControlFlow("try");
@@ -135,19 +135,19 @@ public class MqttServiceGenProcessor extends AbstractProcessor {
         } else {
             codeBlock.addStatement("byte[] payload = new $T($L).toString().getBytes()", JSONObject.class, msgBody.getSimpleName());
         }
-        if (hasFuture) {
+        if (hasReply) {
             codeBlock.addStatement("long serialNum = $T.getSerialNum()", MqttXUtil.class);
             codeBlock.addStatement("payload = new $T($T.getMyClientId(), System.currentTimeMillis(), serialNum, payload).encode()", MqttRespMsg.class, MqttXUtil.class);
         }
         codeBlock.addStatement("mqttClient.publish($L, payload, $L, $L)", createTopicStatement(topicPattern, paramNames), qos, retained);
-        if (hasFuture) {
-            codeBlock.addStatement("Future future = Future.future()");
-            codeBlock.addStatement("mqttRespService.addWaitFuture(serialNum, future)");
-            codeBlock.addStatement("return future");
+        if (hasReply) {
+            codeBlock.addStatement("MqttReply reply = MqttReply.reply()");
+            codeBlock.addStatement("mqttRespService.addWaitReply(serialNum, reply)");
+            codeBlock.addStatement("return reply");
         }
         codeBlock.nextControlFlow("catch ($T e)", Exception.class);
-        if (hasFuture) {
-            codeBlock.addStatement("return Future.failFuture(e)");
+        if (hasReply) {
+            codeBlock.addStatement("return MqttReply.failReply(e)");
         }
         codeBlock.endControlFlow();
         return codeBlock.build();

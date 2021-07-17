@@ -1,4 +1,4 @@
-package xyz.iaoe.spring.starter.mqtt.utils;
+package xyz.iaoe.spring.starter.mqtt.common;
 
 import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
@@ -40,7 +40,7 @@ public class AsyncResult<T> {
         return ar;
     }
 
-    public boolean isSuccess() {
+    public boolean success() {
         return !isError;
     }
 
@@ -115,7 +115,7 @@ public class AsyncResult<T> {
     public static <T> byte[] encode(AsyncResult<T> asyncResult) {
         try (ByteArrayOutputStream os = new ByteArrayOutputStream()) {
             DataOutputStream dos = new DataOutputStream(os);
-            if (asyncResult.isSuccess()) {
+            if (asyncResult.success()) {
                 dos.writeBoolean(true);
                 T result = asyncResult.result();
                 if (result != null) {

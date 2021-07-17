@@ -8,11 +8,79 @@
 * 通过注解实现MQTT主题订阅回调代码的编写
 * 通过APT自动生成MQTT消息发送代理
 * 通过响应总线机制实现MQTT消息请求响应
-* 使用Future实现异步编程
+* 使用自定义Reply实现异步编程
+
+# QuickStart
+
+1. Define an interface for mqtt publish/subscribe service
+
+```java
+
+@MqttProxyGen
+public interface MqttUserService {
+
+    @Topic(topic = "/user/{userId}")
+    MqttReply<Void> sendMsg(String userId, String msg);
+
+}
+```
+
+2. publish mqtt msg example
+
+```java
+
+@SpringBootTest(classes = QuickStartApplication.class)
+public class MqttUserServiceTest {
+
+    @Autowired
+    private MqttUserService mqttUserService;
+
+    @Test
+    @DisplayName("send hello world")
+    public void sendHelloWorld() {
+        //send mqtt msg to topic:/user/12 payload:hello world
+        mqttUserService.sendMsg("12", "hello world")
+                //receive mqtt reply
+                .replyHandle(ar -> {
+                    //if mqtt reply is success
+                    if (ar.success()) {
+                        System.out.println("send success");
+                    } else {
+                        System.out.println("send fail, errMsg:" + ar.errMsg());
+                    }
+                });
+        LockSupport.park();
+    }
+}
+```
+
+3. subscribe mqtt msg example
+
+```java
+
+@MqttController(log = true)
+public class MqttUserController implements MqttUserService {
+
+    @Override
+    //subscribe mqtt topic:/user/12
+    @EmqSubscribe("userId=${user.id}")
+    //when receive msg from topic:/user/12, this method will be invoked, and msg is payload
+    public MqttReply<Void> sendMsg(String userId, String msg) {
+        if (msg == null || msg.length() == 0) {
+            return MqttReply.failReply("msg can not be null");
+        } else {
+            System.out.println("user[" + userId + "] receive msg: " + msg);
+            return MqttReply.successReply();
+        }
+    }
+
+}
+```
 
 ## IMPORT
 
 ```xml
+
 <dependencies>
     <dependency>
         <groupId>info.tianyuan</groupId>
@@ -309,10 +377,10 @@ public class MqttControllerBeanProxyHandler implements ApplicationContextAware {
         for (Object mqttController : beansWithAnnotation.values()) {
 
             for (Method method : subscribeHandleMethodList) {
-                Subscribe subscribeAnnotation = method.getAnnotation(Subscribe.class);
+                Subscribe topicAnnotation = method.getAnnotation(Subscribe.class);
 
                 //处理Subscribe注解
-                mqttCallBackManager.addSubsCallBack(subscribeAnnotation.topic(), (topicMatchArray, msg) -> {
+                mqttCallBackManager.addSubsCallBack(topicAnnotation.topic(), (topicMatchArray, msg) -> {
                     //找到topic的元素，同时填入方法里面
                     MqttMessage mqttMsg = msg.getMqttMessage();
 
@@ -349,7 +417,7 @@ mqttCallBackManager.pushNewMsg(topic,new MqttMsg(topic,message));
 订阅消息：
 
 ```java
-mqttCallBackManager.addSubsCallBack(subscribeAnnotation.topic(),(topicMatchArray,msg)->{})
+mqttCallBackManager.addSubsCallBack(topicAnnotation.topic(),(topicMatchArray,msg)->{})
 ```
 
 当在订阅消息的时候，会生成一个主题订阅树，目的是快速匹配消息，比如分别订阅了以下主题

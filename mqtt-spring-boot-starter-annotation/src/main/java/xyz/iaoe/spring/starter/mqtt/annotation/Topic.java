@@ -7,21 +7,18 @@ import java.lang.annotation.Target;
 
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface Subscribe {
+public @interface Topic {
 
     //订阅主题
-    String topic();
-
-    //是否响应
-    boolean reply() default false;
+    String topicPattern();
 
     //是否log, 也就是打印请求响应情况
     boolean log() default true;
 
     //发送Qos
-    int qos() default 0;
+    int sendQos() default 0;
 
     //是否保留发送消息
-    boolean retained() default false;
+    boolean sendRetained() default false;
 
 }

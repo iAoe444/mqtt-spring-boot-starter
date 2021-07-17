@@ -1,4 +1,4 @@
-package xyz.iaoe.spring.starter.mqtt.utils;
+package xyz.iaoe.spring.starter.mqtt.common;
 
 import java.io.*;
 import java.util.Arrays;

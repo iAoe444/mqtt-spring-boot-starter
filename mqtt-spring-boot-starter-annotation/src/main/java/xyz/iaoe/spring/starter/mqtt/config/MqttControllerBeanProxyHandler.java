@@ -11,7 +11,10 @@ import org.springframework.context.ApplicationContextAware;
 import org.springframework.stereotype.Component;
 import xyz.iaoe.spring.starter.mqtt.MqttCallBackManager;
 import xyz.iaoe.spring.starter.mqtt.annotation.MqttController;
-import xyz.iaoe.spring.starter.mqtt.annotation.Subscribe;
+import xyz.iaoe.spring.starter.mqtt.annotation.Topic;
+import xyz.iaoe.spring.starter.mqtt.common.AsyncResult;
+import xyz.iaoe.spring.starter.mqtt.common.MqttReply;
+import xyz.iaoe.spring.starter.mqtt.common.MqttRespMsg;
 import xyz.iaoe.spring.starter.mqtt.constant.MqttServiceException;
 import xyz.iaoe.spring.starter.mqtt.utils.*;
 
@@ -97,36 +100,36 @@ public class MqttControllerBeanProxyHandler implements ApplicationContextAware {
         Map<String, Object> beansWithAnnotation = applicationContext.getBeansWithAnnotation(MqttController.class);
         for (Object mqttController : beansWithAnnotation.values()) {
             List<Method> subscribeHandleMethodList = Arrays.stream(mqttController.getClass().getDeclaredMethods()).
-                    filter(method -> method.isAnnotationPresent(Subscribe.class))
+                    filter(method -> method.isAnnotationPresent(Topic.class))
                     .collect(Collectors.toList());
             //TODO 清除相同方法
             //寻找父类接口的方法
             for (Class<?> anInterface : mqttController.getClass().getInterfaces()) {
                 for (Method method : anInterface.getMethods()) {
-                    if (method.isAnnotationPresent(Subscribe.class)) {
+                    if (method.isAnnotationPresent(Topic.class)) {
                         subscribeHandleMethodList.add(method);
                     }
                 }
             }
 
             for (Method method : subscribeHandleMethodList) {
-                Subscribe subscribeAnnotation = method.getAnnotation(Subscribe.class);
+                Topic topicAnnotation = method.getAnnotation(Topic.class);
                 //处理Subscribe注解
                 //TODO topic的校验
-                mqttCallBackManager.addSubsCallBack(subscribeAnnotation.topic(), (topicMatchArray, msg) -> {
+                mqttCallBackManager.addSubsCallBack(topicAnnotation.topicPattern(), (topicMatchArray, msg) -> {
                     //找到topic的元素，同时填入方法里面
                     MqttMessage mqttMsg = msg.getMqttMessage();
                     MqttRespMsg mqttRespMsg = null;
                     try {
                         //打印MQTT消息
-                        if (mqttController.getClass().getAnnotation(MqttController.class).log() || subscribeAnnotation.log()) {
+                        if (mqttController.getClass().getAnnotation(MqttController.class).log() || topicAnnotation.log()) {
                             log.info("[mqttMsg] topic:{}, qos:{}, msg:{}",
                                     msg.getTopic(), mqttMsg.getQos(), new String(mqttMsg.getPayload()));
                             log.info("[method] {}.{} invoked, matchTopic:{}, matchArray:{}",
-                                    mqttController.getClass().getSimpleName(), method.getName(), subscribeAnnotation.topic(), topicMatchArray);
+                                    mqttController.getClass().getSimpleName(), method.getName(), topicAnnotation.topicPattern(), topicMatchArray);
                         }
                         byte[] payload;
-                        if (Future.class.isAssignableFrom(method.getReturnType())) {
+                        if (MqttReply.class.isAssignableFrom(method.getReturnType())) {
                             mqttRespMsg = new MqttRespMsg(mqttMsg.getPayload());
                             payload = mqttRespMsg.getPayload();
                         } else {
@@ -187,7 +190,7 @@ public class MqttControllerBeanProxyHandler implements ApplicationContextAware {
                         // 看是否需要进行返回, 那就发到回复总线里面
                         if (mqttRespMsg != null) {
                             MqttRespMsg finalMqttRespMsg = mqttRespMsg;
-                            ((Future<?>) result).completeHandle(ar -> {
+                            ((MqttReply<?>) result).replyHandle(ar -> {
                                 try {
                                     byte[] respPayload = new MqttRespMsg(MqttXUtil.getMyClientId(), System.currentTimeMillis(),
                                             finalMqttRespMsg.getSerialNum(), AsyncResult.encode(ar)).encode();

@@ -1,14 +1,14 @@
-package xyz.iaoe.spring.starter.mqtt.utils;
+package xyz.iaoe.spring.starter.mqtt.common;
 
 import java.util.Optional;
 
 /**
- * Future工具类
+ * MqttReply工具类
  *
  * @author iaoe
  * @date 2021/6/25 13:32
  */
-public class Future<T> {
+public class MqttReply<T> {
 
 
     private volatile Handler<AsyncResult<T>> completeHandler;
@@ -18,26 +18,32 @@ public class Future<T> {
     private AsyncResult<T> asyncResult;
     private volatile boolean isHandle;
 
-    public static <T> Future<T> successFuture(T result) {
-        Future<T> future = new Future<>();
-        future.asyncResult = AsyncResult.successResult(result);
-        return future;
+    public static MqttReply<Void> successReply() {
+        MqttReply<Void> mqttReply = new MqttReply<>();
+        mqttReply.asyncResult = AsyncResult.successResult(null);
+        return mqttReply;
     }
 
-    public static <T> Future<T> failFuture(Exception e) {
-        Future<T> future = new Future<>();
-        future.asyncResult = AsyncResult.errResult(e);
-        return future;
+    public static <T> MqttReply<T> successReply(T result) {
+        MqttReply<T> mqttReply = new MqttReply<>();
+        mqttReply.asyncResult = AsyncResult.successResult(result);
+        return mqttReply;
     }
 
-    public static <T> Future<T> failFuture(String errMsg) {
-        Future<T> future = new Future<>();
-        future.asyncResult = AsyncResult.errResult(errMsg);
-        return future;
+    public static <T> MqttReply<T> failReply(Exception e) {
+        MqttReply<T> mqttReply = new MqttReply<>();
+        mqttReply.asyncResult = AsyncResult.errResult(e);
+        return mqttReply;
     }
 
-    public static <T> Future<T> future() {
-        return new Future<>();
+    public static <T> MqttReply<T> failReply(String errMsg) {
+        MqttReply<T> mqttReply = new MqttReply<>();
+        mqttReply.asyncResult = AsyncResult.errResult(errMsg);
+        return mqttReply;
+    }
+
+    public static <T> MqttReply<T> reply() {
+        return new MqttReply<>();
     }
 
     public synchronized boolean trySuccess(T result) {
@@ -104,7 +110,7 @@ public class Future<T> {
         }
     }
 
-    public void completeHandle(Handler<AsyncResult<T>> handler) {
+    public void replyHandle(Handler<AsyncResult<T>> handler) {
         this.completeHandler = handler;
         tryComplete();
     }
@@ -112,7 +118,7 @@ public class Future<T> {
 
     private synchronized void tryComplete() {
         if (asyncResult != null) {
-            if (asyncResult.isSuccess()) {
+            if (asyncResult.success()) {
                 trySuccess(asyncResult.result());
             } else {
                 tryFail(asyncResult.errMsg());
